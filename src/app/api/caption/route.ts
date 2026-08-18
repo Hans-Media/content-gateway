@@ -127,7 +127,10 @@ Aturan:
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
-        generationConfig: { maxOutputTokens: 400 },
+        generationConfig: {
+          maxOutputTokens: 1024,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
     });
 
