@@ -132,3 +132,5 @@ data/                    dibuat otomatis saat runtime, JANGAN di-commit
 - Semua token disimpan **plaintext** di `data/db.json` untuk kesederhanaan.
   Kalau dipakai tim (bukan cuma kamu sendiri), tambahkan enkripsi/secret
   manager sebelum deploy produksi.
+
+<!-- force rebuild -->
