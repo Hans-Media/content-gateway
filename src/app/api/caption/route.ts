@@ -104,7 +104,12 @@ ${platformNote}
 
 Aturan:
 - Bahasa Indonesia, gaya santai dan natural, bukan kaku/formal.
-- Panjang 1-4 kalimat pendek, boleh ada emoji secukupnya (jangan berlebihan).
+- Panjang caption medium-long: sekitar 5-9 kalimat/baris pendek (bukan cuma 1-2 kalimat), dengan alur seperti ini:
+  1. Hook pembuka yang narik perhatian & menyentuh sisi emosional (bayangin hidup/keluarga yang lebih baik, rasa tenang, kebanggaan, dsb — bukan cuma jualan fitur).
+  2. 1-2 kalimat yang bangun cerita/manfaat emosionalnya lebih dalam.
+  3. Sentuhan scarcity/urgensi yang terasa natural, bukan maksa (misal: unit terbatas, harga akan naik, promo/kuota terbatas, banyak yang udah nanya/booking) — jangan mengada-ada kalau nggak ada info spesifik dari user, cukup pakai frasa umum yang masuk akal.
+  4. Call-to-action singkat yang jelas di akhir (ajak DM/hubungi/cek info lebih lanjut).
+- Boleh ada emoji secukupnya buat mempercantik (jangan berlebihan, jangan tiap baris).
 - Sertakan 3-6 hashtag relevan di baris terakhir.
 - Jangan pakai tanda kutip di awal/akhir. Jangan beri penjelasan lain, output HANYA caption-nya langsung.`;
 
