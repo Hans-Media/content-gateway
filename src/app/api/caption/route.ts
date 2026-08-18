@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
@@ -10,6 +9,9 @@ import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 const execFileAsync = promisify(execFile);
+
+const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 function mimeFromExt(ext: string) {
   const e = ext.toLowerCase();
@@ -44,10 +46,10 @@ async function extractVideoFrame(videoPath: string): Promise<Buffer | null> {
 
 export async function POST(req: NextRequest) {
   const db = await getDb();
-  const apiKey = db.data.settings.anthropic?.apiKey;
+  const apiKey = db.data.settings.gemini?.apiKey;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Isi Anthropic API Key di Settings dulu (bagian AI Caption)." },
+      { error: "Isi Gemini API Key di Settings dulu (bagian AI Caption)." },
       { status: 400 }
     );
   }
@@ -91,8 +93,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const anthropic = new Anthropic({ apiKey });
-
   const platformNote = platforms.length
     ? `Caption ini akan dipakai bersamaan di: ${platforms.join(", ")}. Buat satu caption yang cocok dipakai di semua platform itu (jangan sebut nama platform di dalam caption).`
     : "";
@@ -109,27 +109,40 @@ Aturan:
 - Jangan pakai tanda kutip di awal/akhir. Jangan beri penjelasan lain, output HANYA caption-nya langsung.`;
 
   try {
-    const content: Anthropic.MessageParam["content"] = [];
+    const parts: any[] = [];
     if (imageBase64) {
-      content.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: imageMime as any,
-          data: imageBase64,
-        },
+      parts.push({
+        inline_data: { mime_type: imageMime, data: imageBase64 },
       });
     }
-    content.push({ type: "text", text: instructions });
+    parts.push({ text: instructions });
 
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 400,
-      messages: [{ role: "user", content }],
+    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }],
+        generationConfig: { maxOutputTokens: 400 },
+      }),
     });
 
-    const textBlock = msg.content.find((b) => b.type === "text");
-    const caption = textBlock && "text" in textBlock ? textBlock.text.trim() : "";
+    const json = await res.json();
+    if (!res.ok) {
+      return NextResponse.json(
+        {
+          error: `Gagal generate caption: ${
+            json?.error?.message ?? JSON.stringify(json)
+          }`,
+        },
+        { status: 500 }
+      );
+    }
+
+    const caption: string =
+      json?.candidates?.[0]?.content?.parts
+        ?.map((p: any) => p.text ?? "")
+        .join("")
+        .trim() ?? "";
 
     if (!caption) {
       return NextResponse.json(

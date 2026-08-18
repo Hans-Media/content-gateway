@@ -14,9 +14,7 @@ export type PlatformKey =
   | "threads"
   | "tiktok"
   | "youtube"
-  | "x"
-  | "instagram_story"
-  | "facebook_story";
+  | "x";
 
 export type PlatformStatus = {
   state: "pending" | "publishing" | "success" | "error" | "skipped";
@@ -59,7 +57,6 @@ export type Settings = {
     channelId?: string;
   };
   baseUrl?: string; // public URL this app is deployed at, needed for IG/Threads media fetch
-  gemini?: { apiKey?: string };
 };
 
 type DbSchema = {

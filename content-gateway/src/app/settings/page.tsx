@@ -26,7 +26,6 @@ type Settings = {
     channelId?: string;
   };
   baseUrl?: string;
-  gemini?: { apiKey?: string };
 };
 
 function Field({
@@ -132,19 +131,6 @@ export default function SettingsPage() {
           platform terkait.
         </p>
       </div>
-
-      <Card
-        title="✨ AI Caption (Gemini)"
-        subtitle="Isi API key gratis dari aistudio.google.com (nggak perlu kartu kredit) supaya tombol 'Generate Caption (AI)' di halaman Upload bisa jalan — AI akan lihat foto/frame video kamu dan bikinkan caption otomatis."
-        connected={!!settings.gemini?.apiKey}
-      >
-        <Field
-          label="Gemini API Key"
-          value={settings.gemini?.apiKey ?? ""}
-          onChange={(v) => set("gemini", { apiKey: v })}
-          placeholder="AIza..."
-        />
-      </Card>
 
       <Card
         title="Base URL deployment"

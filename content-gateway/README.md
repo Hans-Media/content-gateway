@@ -77,23 +77,6 @@ Publish beneran jalan ke akun asli, tiap platform perlu setup satu kali:
    didaftarkan sebagai test user yang bisa connect. Ajukan verifikasi Google
    untuk publik.
 
-## Auto-caption pakai AI (Gemini)
-
-Di halaman Upload ada tombol **✨ Generate Caption (AI)**. Ini yang perlu disiapkan:
-
-1. Buat API key gratis di [aistudio.google.com](https://aistudio.google.com/apikey) (tidak perlu kartu kredit).
-2. Tempel di Settings → bagian **AI Caption (Gemini)**.
-3. Upload foto/video → (opsional) isi field "Tema/konteks" kalau mau arahkan
-   gaya captionnya → klik Generate Caption. AI akan "melihat" foto (atau
-   frame pertama video, diambil pakai `ffmpeg`) dan bikinkan caption + hashtag
-   otomatis, langsung terisi di kolom caption — tinggal edit kalau perlu,
-   lalu Publish.
-
-> Kalau deploy ke Render pakai `render.yaml` di bawah, `ffmpeg` **tidak**
-> otomatis ada di environment mereka. Kalau frame video gagal diambil, AI
-> tetap jalan tapi hanya berdasarkan teks tema yang kamu isi (tanpa "melihat"
-> videonya). Untuk foto, ini tidak masalah — selalu bisa dianalisis langsung.
-
 ## Deploy supaya bisa diakses dari mana saja
 
 App ini butuh URL publik HTTPS yang hidup terus, karena:
@@ -108,9 +91,13 @@ antar request di serverless functions, jadi file upload & `data/db.json`
 akan hilang — kalau mau pakai Vercel, ganti storage jadi S3/Supabase dan
 lowdb jadi database beneran (Postgres/SQLite via Turso).
 
-Project ini sudah dilengkapi `render.yaml` (Blueprint) supaya Render otomatis
-tahu build/start command dan bikin disk penyimpanan persisten untuk
-`data/db.json` + file upload. Lihat panduan step-by-step lengkap di chat.
+Langkah umum di Render:
+1. Push folder ini ke repo GitHub.
+2. Render → New → Web Service → connect repo.
+3. Build command: `npm install && npm run build`
+4. Start command: `npm run start`
+5. Setelah deploy, buka `https://<nama-app>.onrender.com/settings`, isi
+   field **Base URL** dengan URL itu juga, lalu isi semua kredensial di atas.
 
 ## Struktur
 
