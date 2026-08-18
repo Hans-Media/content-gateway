@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type PlatformKey = "instagram" | "facebook" | "threads" | "tiktok" | "youtube" | "x";
+type PlatformKey =
+  | "instagram"
+  | "facebook"
+  | "threads"
+  | "tiktok"
+  | "youtube"
+  | "x"
+  | "instagram_story"
+  | "facebook_story";
 
 const PLATFORMS: { key: PlatformKey; label: string; emoji: string }[] = [
   { key: "instagram", label: "Instagram", emoji: "📸" },
@@ -11,6 +19,8 @@ const PLATFORMS: { key: PlatformKey; label: string; emoji: string }[] = [
   { key: "youtube", label: "YouTube", emoji: "▶️" },
   { key: "threads", label: "Threads", emoji: "🧵" },
   { key: "x", label: "X (Twitter)", emoji: "✖️" },
+  { key: "instagram_story", label: "Instagram Story", emoji: "⭐️" },
+  { key: "facebook_story", label: "Facebook Story", emoji: "🌟" },
 ];
 
 type PostStatus = {

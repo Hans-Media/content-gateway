@@ -14,7 +14,9 @@ export type PlatformKey =
   | "threads"
   | "tiktok"
   | "youtube"
-  | "x";
+  | "x"
+  | "instagram_story"
+  | "facebook_story";
 
 export type PlatformStatus = {
   state: "pending" | "publishing" | "success" | "error" | "skipped";
