@@ -128,8 +128,7 @@ Aturan:
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
         generationConfig: {
-          maxOutputTokens: 1024,
-          thinkingConfig: { thinkingBudget: 0 },
+          maxOutputTokens: 2048,
         },
       }),
     });
