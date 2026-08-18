@@ -6,6 +6,8 @@ import { publishThreads } from "./threads";
 import { publishTiktok } from "./tiktok";
 import { publishYoutube } from "./youtube";
 import { publishX } from "./x";
+import { publishInstagramStory } from "./instagramStory";
+import { publishFacebookStory } from "./facebookStory";
 
 export const publishers: Record<PlatformKey, Publisher> = {
   instagram: publishInstagram,
@@ -14,6 +16,8 @@ export const publishers: Record<PlatformKey, Publisher> = {
   tiktok: publishTiktok,
   youtube: publishYoutube,
   x: publishX,
+  instagram_story: publishInstagramStory,
+  facebook_story: publishFacebookStory,
 };
 
 export const platformLabels: Record<PlatformKey, string> = {
@@ -23,4 +27,6 @@ export const platformLabels: Record<PlatformKey, string> = {
   tiktok: "TikTok",
   youtube: "YouTube",
   x: "X (Twitter)",
+  instagram_story: "Instagram Story",
+  facebook_story: "Facebook Story",
 };
