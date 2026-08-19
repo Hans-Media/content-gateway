@@ -35,22 +35,64 @@ export const publishFacebookStory: Publisher = async ({
     const buffer = fs.readFileSync(mediaPath);
 
     if (post.mediaType === "video") {
-      const form = new FormData();
-      form.append("source", new Blob([buffer]), "video.mp4");
-      form.append("published", "false");
-      form.append("access_token", token);
+      // Facebook Stories require the resumable upload protocol
+      // (upload_phase=start/transfer/finish) instead of a plain source POST.
+      const size = buffer.length;
 
-      const uploadRes = await fetch(`${GRAPH_VIDEO}/${pageId}/videos`, {
+      const startRes = await fetch(`${GRAPH_VIDEO}/${pageId}/videos`, {
         method: "POST",
-        body: form,
+        body: new URLSearchParams({
+          upload_phase: "start",
+          file_size: String(size),
+          access_token: token,
+        }),
       });
-      const uploadJson = await uploadRes.json();
-      if (!uploadRes.ok || !uploadJson.id) {
+      const startJson = await startRes.json();
+      if (!startRes.ok || !startJson.upload_session_id || !startJson.video_id) {
         return {
           success: false,
-          message: `Gagal upload video story: ${JSON.stringify(uploadJson)}`,
+          message: `Gagal mulai upload video story: ${JSON.stringify(startJson)}`,
         };
       }
+      const uploadSessionId = startJson.upload_session_id;
+      const videoId = startJson.video_id;
+
+      const transferForm = new FormData();
+      transferForm.append("upload_phase", "transfer");
+      transferForm.append("upload_session_id", uploadSessionId);
+      transferForm.append("start_offset", String(startJson.start_offset ?? 0));
+      transferForm.append("video_file_chunk", new Blob([buffer]), "video.mp4");
+      transferForm.append("access_token", token);
+
+      const transferRes = await fetch(`${GRAPH_VIDEO}/${pageId}/videos`, {
+        method: "POST",
+        body: transferForm,
+      });
+      const transferJson = await transferRes.json();
+      if (!transferRes.ok) {
+        return {
+          success: false,
+          message: `Gagal transfer video story: ${JSON.stringify(transferJson)}`,
+        };
+      }
+
+      const finishRes = await fetch(`${GRAPH_VIDEO}/${pageId}/videos`, {
+        method: "POST",
+        body: new URLSearchParams({
+          upload_phase: "finish",
+          upload_session_id: uploadSessionId,
+          access_token: token,
+        }),
+      });
+      const finishJson = await finishRes.json();
+      if (!finishRes.ok || finishJson.success === false) {
+        return {
+          success: false,
+          message: `Gagal selesaikan upload video story: ${JSON.stringify(finishJson)}`,
+        };
+      }
+
+      const uploadJson = { id: videoId };
 
       const storyRes = await fetch(`${GRAPH}/${pageId}/video_stories`, {
         method: "POST",
