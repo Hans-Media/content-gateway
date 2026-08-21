@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs";
 import { Readable } from "stream";
-import { pipeline } from "stream/promises";
+import formidable from "formidable";
 import { getDb, getUploadsDir, Post, PlatformKey } from "@/lib/db";
 import { publishers } from "@/lib/publishers";
 import { getBaseUrl } from "@/lib/baseUrl";
@@ -22,11 +22,63 @@ export async function GET() {
   return NextResponse.json({ posts });
 }
 
+/**
+ * Next's own `request.formData()` reads the ENTIRE multipart body into
+ * memory before handing back a File — for a big video that alone can OOM a
+ * small-RAM container even if everything downstream streams properly. So we
+ * parse the raw request stream ourselves with formidable, which writes the
+ * uploaded file to disk as bytes arrive instead of buffering it all first.
+ */
+async function parseUploadStreaming(req: NextRequest) {
+  const nodeReq = Readable.fromWeb(req.body as any) as any;
+  nodeReq.headers = Object.fromEntries(req.headers.entries());
+  nodeReq.method = req.method;
+
+  const form = formidable({
+    uploadDir: getUploadsDir(),
+    keepExtensions: true,
+    maxFileSize: MAX_UPLOAD_BYTES,
+    multiples: false,
+  });
+
+  return new Promise<{ fields: formidable.Fields; files: formidable.Files }>(
+    (resolve, reject) => {
+      form.parse(nodeReq, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
+    }
+  );
+}
+
+function firstValue(v: string | string[] | undefined): string {
+  return Array.isArray(v) ? v[0] ?? "" : v ?? "";
+}
+
 export async function POST(req: NextRequest) {
-  const form = await req.formData();
-  const caption = (form.get("caption") as string) ?? "";
-  const platformsRaw = form.get("platforms") as string; // JSON array
-  const file = form.get("file") as File | null;
+  let fields: formidable.Fields;
+  let files: formidable.Files;
+  try {
+    ({ fields, files } = await parseUploadStreaming(req));
+  } catch (err: any) {
+    const message = String(err?.message ?? err);
+    if (message.toLowerCase().includes("maxfilesize")) {
+      return NextResponse.json(
+        {
+          error: `File terlalu besar. Maksimal ${MAX_UPLOAD_BYTES / 1024 / 1024}MB — kompres dulu videonya ya.`,
+        },
+        { status: 413 }
+      );
+    }
+    return NextResponse.json(
+      { error: `Gagal upload file: ${message}` },
+      { status: 400 }
+    );
+  }
+
+  const caption = firstValue(fields.caption);
+  const platformsRaw = firstValue(fields.platforms); // JSON array
+  const uploadedFile = Array.isArray(files.file) ? files.file[0] : files.file;
 
   let platforms: PlatformKey[] = [];
   try {
@@ -45,26 +97,18 @@ export async function POST(req: NextRequest) {
   let mediaFile = "";
   let mediaType: "image" | "video" = "image";
 
-  if (file) {
-    if (file.size > MAX_UPLOAD_BYTES) {
-      return NextResponse.json(
-        {
-          error: `File terlalu besar (${(file.size / 1024 / 1024).toFixed(
-            0
-          )}MB). Maksimal ${MAX_UPLOAD_BYTES / 1024 / 1024}MB — kompres dulu videonya ya.`,
-        },
-        { status: 413 }
-      );
-    }
-    const ext = path.extname(file.name) || ".jpg";
+  if (uploadedFile) {
+    // formidable already streamed the file straight to getUploadsDir() —
+    // just rename it to our own uuid-based filename.
+    const ext =
+      path.extname(uploadedFile.originalFilename ?? "") ||
+      path.extname(uploadedFile.filepath) ||
+      ".jpg";
     mediaFile = `${uuidv4()}${ext}`;
-    // Stream the upload straight to disk instead of buffering the whole
-    // file in memory first — important on small-RAM hosting (Railway) so a
-    // large video doesn't OOM the container.
-    await pipeline(
-      Readable.fromWeb(file.stream() as any),
-      fs.createWriteStream(path.join(getUploadsDir(), mediaFile))
-    );
+    const finalPath = path.join(getUploadsDir(), mediaFile);
+    if (path.resolve(uploadedFile.filepath) !== path.resolve(finalPath)) {
+      fs.renameSync(uploadedFile.filepath, finalPath);
+    }
     mediaType = [".mp4", ".mov", ".m4v"].includes(ext.toLowerCase())
       ? "video"
       : "image";
