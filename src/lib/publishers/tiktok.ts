@@ -31,6 +31,23 @@ export const publishTiktok: Publisher = async ({ post, settings, mediaPath }) =>
     const size = fs.statSync(mediaPath).size;
 
     if (post.mediaType === "video") {
+      // TikTok requires the video to be uploaded in chunks of at most 64MB
+      // each (a single chunk is only allowed when the whole video is <=
+      // MIN_CHUNK_SIZE). Sending a big video as "1 chunk = whole file" (like
+      // this used to) gets rejected with "chunk size is invalid".
+      const MIN_CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+      const MAX_CHUNK_SIZE = 64 * 1024 * 1024; // 64MB
+      const CHUNK_SIZE = Math.min(size, 10 * 1024 * 1024); // 10MB, well under the 64MB cap
+
+      let totalChunkCount = Math.max(1, Math.ceil(size / CHUNK_SIZE));
+      // TikTok also requires the final chunk to be at least MIN_CHUNK_SIZE
+      // (unless there's only one chunk) — fold a too-small remainder into
+      // the previous chunk instead.
+      if (totalChunkCount > 1) {
+        const lastChunkSize = size - CHUNK_SIZE * (totalChunkCount - 1);
+        if (lastChunkSize < MIN_CHUNK_SIZE) totalChunkCount -= 1;
+      }
+
       const initRes = await fetch(
         "https://open.tiktokapis.com/v2/post/publish/video/init/",
         {
@@ -50,8 +67,8 @@ export const publishTiktok: Publisher = async ({ post, settings, mediaPath }) =>
             source_info: {
               source: "FILE_UPLOAD",
               video_size: size,
-              chunk_size: size,
-              total_chunk_count: 1,
+              chunk_size: totalChunkCount === 1 ? size : CHUNK_SIZE,
+              total_chunk_count: totalChunkCount,
             },
           }),
         }
@@ -65,22 +82,30 @@ export const publishTiktok: Publisher = async ({ post, settings, mediaPath }) =>
         };
       }
 
-      const putRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "video/mp4",
-          "Content-Length": String(size),
-          "Content-Range": `bytes 0-${size - 1}/${size}`,
-        },
-        // @ts-expect-error - Node readable stream is a valid fetch body (async iterable)
-        body: fs.createReadStream(mediaPath),
-        duplex: "half",
-      });
-      if (!putRes.ok) {
-        return {
-          success: false,
-          message: `Gagal upload file video ke TikTok: ${putRes.status} ${await putRes.text()}`,
-        };
+      // Upload each chunk in turn, streaming just that byte range from disk
+      // so we never hold more than one chunk in memory at a time.
+      for (let i = 0; i < totalChunkCount; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = i === totalChunkCount - 1 ? size - 1 : start + CHUNK_SIZE - 1;
+        const chunkLength = end - start + 1;
+
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "video/mp4",
+            "Content-Length": String(chunkLength),
+            "Content-Range": `bytes ${start}-${end}/${size}`,
+          },
+          // @ts-expect-error - Node readable stream is a valid fetch body (async iterable)
+          body: fs.createReadStream(mediaPath, { start, end }),
+          duplex: "half",
+        });
+        if (!putRes.ok) {
+          return {
+            success: false,
+            message: `Gagal upload chunk ${i + 1}/${totalChunkCount} video ke TikTok: ${putRes.status} ${await putRes.text()}`,
+          };
+        }
       }
 
       return {
