@@ -1,4 +1,5 @@
 import fs from "fs";
+import FormData from "form-data";
 import { Publisher } from "./types";
 
 const GRAPH = "https://graph.facebook.com/v20.0";
@@ -9,6 +10,10 @@ const GRAPH_VIDEO = "https://graph-video.facebook.com/v20.0";
  * Docs: https://developers.facebook.com/docs/page-stories-api
  * Flow: upload the media unpublished first (published=false) to get a
  * photo_id/video_id, then attach it to the page's story feed.
+ *
+ * Uploads stream the file straight from disk instead of loading the whole
+ * thing into memory first — important on small-RAM hosting (Railway) so a
+ * large video doesn't OOM the container.
  */
 export const publishFacebookStory: Publisher = async ({
   post,
@@ -32,12 +37,10 @@ export const publishFacebookStory: Publisher = async ({
   }
 
   try {
-    const buffer = fs.readFileSync(mediaPath);
-
     if (post.mediaType === "video") {
       // Facebook Stories require the resumable upload protocol
       // (upload_phase=start/transfer/finish) instead of a plain source POST.
-      const size = buffer.length;
+      const size = fs.statSync(mediaPath).size;
 
       const startRes = await fetch(`${GRAPH_VIDEO}/${pageId}/videos`, {
         method: "POST",
@@ -61,12 +64,17 @@ export const publishFacebookStory: Publisher = async ({
       transferForm.append("upload_phase", "transfer");
       transferForm.append("upload_session_id", uploadSessionId);
       transferForm.append("start_offset", String(startJson.start_offset ?? 0));
-      transferForm.append("video_file_chunk", new Blob([buffer]), "video.mp4");
+      transferForm.append("video_file_chunk", fs.createReadStream(mediaPath), {
+        filename: "video.mp4",
+      });
       transferForm.append("access_token", token);
 
       const transferRes = await fetch(`${GRAPH_VIDEO}/${pageId}/videos`, {
         method: "POST",
+        headers: transferForm.getHeaders(),
+        // @ts-expect-error - Node's form-data stream is a valid fetch body (async iterable)
         body: transferForm,
+        duplex: "half",
       });
       const transferJson = await transferRes.json();
       if (!transferRes.ok) {
@@ -114,13 +122,18 @@ export const publishFacebookStory: Publisher = async ({
       };
     } else {
       const form = new FormData();
-      form.append("source", new Blob([buffer]), "photo.jpg");
+      form.append("source", fs.createReadStream(mediaPath), {
+        filename: "photo.jpg",
+      });
       form.append("published", "false");
       form.append("access_token", token);
 
       const uploadRes = await fetch(`${GRAPH}/${pageId}/photos`, {
         method: "POST",
+        headers: form.getHeaders(),
+        // @ts-expect-error - Node's form-data stream is a valid fetch body (async iterable)
         body: form,
+        duplex: "half",
       });
       const uploadJson = await uploadRes.json();
       if (!uploadRes.ok || !uploadJson.id) {

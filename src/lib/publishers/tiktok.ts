@@ -13,6 +13,10 @@ import { Publisher } from "./types";
  * NOTE: unaudited TikTok apps can only post to the developer's own sandboxed
  * test account ("self-only" / private). Submit your app for audit to unlock
  * public posting to a real account.
+ *
+ * The file is streamed straight from disk instead of loaded fully into
+ * memory first — important on small-RAM hosting (Railway) so a large video
+ * doesn't OOM the container.
  */
 export const publishTiktok: Publisher = async ({ post, settings, mediaPath }) => {
   const token = settings.tiktok?.accessToken;
@@ -24,8 +28,7 @@ export const publishTiktok: Publisher = async ({ post, settings, mediaPath }) =>
   }
 
   try {
-    const buffer = fs.readFileSync(mediaPath);
-    const size = buffer.length;
+    const size = fs.statSync(mediaPath).size;
 
     if (post.mediaType === "video") {
       const initRes = await fetch(
@@ -66,9 +69,12 @@ export const publishTiktok: Publisher = async ({ post, settings, mediaPath }) =>
         method: "PUT",
         headers: {
           "Content-Type": "video/mp4",
+          "Content-Length": String(size),
           "Content-Range": `bytes 0-${size - 1}/${size}`,
         },
-        body: buffer,
+        // @ts-expect-error - Node readable stream is a valid fetch body (async iterable)
+        body: fs.createReadStream(mediaPath),
+        duplex: "half",
       });
       if (!putRes.ok) {
         return {
@@ -122,9 +128,12 @@ export const publishTiktok: Publisher = async ({ post, settings, mediaPath }) =>
         method: "PUT",
         headers: {
           "Content-Type": "image/jpeg",
+          "Content-Length": String(size),
           "Content-Range": `bytes 0-${size - 1}/${size}`,
         },
-        body: buffer,
+        // @ts-expect-error - Node readable stream is a valid fetch body (async iterable)
+        body: fs.createReadStream(mediaPath),
+        duplex: "half",
       });
       if (!putRes.ok) {
         return {

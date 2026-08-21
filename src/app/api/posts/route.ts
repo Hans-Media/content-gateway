@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import { getDb, getUploadsDir, Post, PlatformKey } from "@/lib/db";
 import { publishers } from "@/lib/publishers";
 import { getBaseUrl } from "@/lib/baseUrl";
 
 export const runtime = "nodejs";
+
+// Hard cap so one giant upload can't take down the whole container on
+// small-RAM hosting (Railway). Ask the user to compress bigger files.
+const MAX_UPLOAD_BYTES = 300 * 1024 * 1024; // 300MB
 
 export async function GET() {
   const db = await getDb();
@@ -40,10 +46,25 @@ export async function POST(req: NextRequest) {
   let mediaType: "image" | "video" = "image";
 
   if (file) {
-    const bytes = Buffer.from(await file.arrayBuffer());
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        {
+          error: `File terlalu besar (${(file.size / 1024 / 1024).toFixed(
+            0
+          )}MB). Maksimal ${MAX_UPLOAD_BYTES / 1024 / 1024}MB — kompres dulu videonya ya.`,
+        },
+        { status: 413 }
+      );
+    }
     const ext = path.extname(file.name) || ".jpg";
     mediaFile = `${uuidv4()}${ext}`;
-    fs.writeFileSync(path.join(getUploadsDir(), mediaFile), bytes);
+    // Stream the upload straight to disk instead of buffering the whole
+    // file in memory first — important on small-RAM hosting (Railway) so a
+    // large video doesn't OOM the container.
+    await pipeline(
+      Readable.fromWeb(file.stream() as any),
+      fs.createWriteStream(path.join(getUploadsDir(), mediaFile))
+    );
     mediaType = [".mp4", ".mov", ".m4v"].includes(ext.toLowerCase())
       ? "video"
       : "image";
