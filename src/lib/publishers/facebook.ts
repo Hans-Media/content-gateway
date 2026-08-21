@@ -38,7 +38,10 @@ export const publishFacebook: Publisher = async ({
       });
       form.append("access_token", token);
 
-      const res = await fetch(`${GRAPH_VIDEO}/${pageId}/videos`, {
+      // access_token is also passed as a query param — Facebook's video
+      // upload endpoint doesn't always pick it up reliably from a streamed
+      // multipart body, and fails with "An access token is required".
+      const res = await fetch(`${GRAPH_VIDEO}/${pageId}/videos?access_token=${encodeURIComponent(token)}`, {
         method: "POST",
         headers: form.getHeaders(),
         // @ts-expect-error - Node's form-data stream is a valid fetch body (async iterable)
@@ -65,7 +68,9 @@ export const publishFacebook: Publisher = async ({
       });
       form.append("access_token", token);
 
-      const res = await fetch(`${GRAPH}/${pageId}/photos`, {
+      // access_token is also passed as a query param — same reliability
+      // reason as the video branch above.
+      const res = await fetch(`${GRAPH}/${pageId}/photos?access_token=${encodeURIComponent(token)}`, {
         method: "POST",
         headers: form.getHeaders(),
         // @ts-expect-error - Node's form-data stream is a valid fetch body (async iterable)
